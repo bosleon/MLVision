@@ -50,12 +50,10 @@ var (
 		Source: "dima806/fairface_gender_image_detection", License: "Apache-2.0"}
 	FaceSCRFD = Model{Name: "face-scrfd-10g", SHA256: "5838f7fe053675b1c7a08b633df49e7af5495cee0493c7dcf6697200b85b5b91", Size: 16923827,
 		Source: "deepinsight/insightface buffalo_l", License: "non-commercial research only"}
-	GenderAgeInsight = Model{Name: "genderage-insightface-96", SHA256: "4fde69b1c810857b88c64a335084f1c3fe8f01246c9a191b48c7bb756d6652fb", Size: 1322532,
-		Source: "deepinsight/insightface buffalo_l", License: "non-commercial research only"}
 )
 
 // All lists every registered model.
-var All = []Model{NSFWMarqo, NudeNet, FaceUltra, AgeFairFace, GenderFairFace, FaceSCRFD, GenderAgeInsight}
+var All = []Model{NSFWMarqo, NudeNet, FaceUltra, AgeFairFace, GenderFairFace, FaceSCRFD}
 
 // Dir returns the cache directory: override, then MLVISION_MODEL_DIR, then
 // the user cache directory.

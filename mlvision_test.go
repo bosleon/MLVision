@@ -63,7 +63,7 @@ func TestNoiseIsSafe(t *testing.T) {
 func TestDefaults(t *testing.T) {
 	var th Thresholds
 	th.fill()
-	if th.NSFW != 0.8 || th.Safe != 0.2 || th.Part != 0.5 || th.MinorAge != 18 {
+	if th.NSFW != 0.8 || th.Safe != 0.2 || th.Part != 0.5 || th.MinorAge != 18 || th.MinFace != 24 {
 		t.Fatalf("%+v", th)
 	}
 }

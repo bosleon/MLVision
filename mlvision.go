@@ -26,8 +26,8 @@ type Profile string
 const (
 	// Commercial uses only permissively licensed models (Apache, MIT, AGPL).
 	Commercial Profile = "commercial"
-	// Research adds InsightFace face and age models, which are licensed
-	// for non-commercial research use only. Better age accuracy.
+	// Research swaps in InsightFace's SCRFD face detector, which is licensed
+	// for non-commercial research use only. Stronger in crowds and at angles.
 	Research Profile = "research"
 )
 
@@ -37,6 +37,7 @@ type Thresholds struct {
 	Safe     float32 // classifier score below which the part detector is skipped (0.2)
 	Part     float32 // minimum detector score for an exposed part to count (0.5)
 	MinorAge int     // ages below this mark a face as a minor (18)
+	MinFace  int     // faces narrower than this in pixels get no age or gender (24)
 }
 
 // Options configure an Analyzer. The zero value is a sensible default.
@@ -63,10 +64,13 @@ type Part struct {
 	Box   Box     `json:"box"`
 }
 
-// Face is one detected face with its estimated attributes.
+// Face is one detected face with its estimated attributes. Age and gender
+// are only filled in when Estimated is true; faces smaller than
+// Thresholds.MinFace are too blurry to judge and are reported box-only.
 type Face struct {
 	Box         Box     `json:"box"`
 	Score       float32 `json:"score"`
+	Estimated   bool    `json:"estimated"`
 	Age         float32 `json:"age"`
 	AgeRange    [2]int  `json:"age_range"`
 	Gender      string  `json:"gender"`
@@ -105,6 +109,9 @@ func (t *Thresholds) fill() {
 	}
 	if t.MinorAge == 0 {
 		t.MinorAge = 18
+	}
+	if t.MinFace == 0 {
+		t.MinFace = 24
 	}
 }
 
@@ -153,17 +160,6 @@ func New(ctx context.Context, opts Options) (*Analyzer, error) {
 		if a.faces, err = face.LoadUltraFace(p, opts.Threads); err != nil {
 			return nil, err
 		}
-		ap, err := get(models.AgeFairFace)
-		if err != nil {
-			return nil, err
-		}
-		gp, err := get(models.GenderFairFace)
-		if err != nil {
-			return nil, err
-		}
-		if a.attrs, err = face.LoadFairFace(ap, gp, opts.Threads); err != nil {
-			return nil, err
-		}
 	case Research:
 		if p, err = get(models.FaceSCRFD); err != nil {
 			return nil, err
@@ -171,14 +167,19 @@ func New(ctx context.Context, opts Options) (*Analyzer, error) {
 		if a.faces, err = face.LoadSCRFD(p, opts.Threads); err != nil {
 			return nil, err
 		}
-		if p, err = get(models.GenderAgeInsight); err != nil {
-			return nil, err
-		}
-		if a.attrs, err = face.LoadInsight(p, opts.Threads); err != nil {
-			return nil, err
-		}
 	default:
 		return nil, fmt.Errorf("unknown profile %q", opts.Profile)
+	}
+	ap, err := get(models.AgeFairFace)
+	if err != nil {
+		return nil, err
+	}
+	gp, err := get(models.GenderFairFace)
+	if err != nil {
+		return nil, err
+	}
+	if a.attrs, err = face.LoadFairFace(ap, gp, opts.Threads); err != nil {
+		return nil, err
 	}
 	ok = true
 	return a, nil
@@ -224,12 +225,17 @@ func (a *Analyzer) Analyze(ctx context.Context, img image.Image) (Verdict, error
 		return v, err
 	}
 	for _, b := range boxes {
-		at, err := a.attrs.Estimate(img, b.Rect)
-		if err != nil {
-			return v, err
+		f := Face{Box: box(b.Rect), Score: b.Score}
+		if min(b.Rect.Dx(), b.Rect.Dy()) >= t.MinFace {
+			at, err := a.attrs.Estimate(img, b.Rect)
+			if err != nil {
+				return v, err
+			}
+			f.Estimated = true
+			f.Age, f.AgeRange = at.Age, [2]int{at.AgeLow, at.AgeHigh}
+			f.Gender, f.GenderScore = at.Gender, at.GenderScore
+			f.Minor = at.Age < float32(t.MinorAge)
 		}
-		f := Face{Box: box(b.Rect), Score: b.Score, Age: at.Age, AgeRange: [2]int{at.AgeLow, at.AgeHigh},
-			Gender: at.Gender, GenderScore: at.GenderScore, Minor: at.Age < float32(t.MinorAge)}
 		if f.Minor {
 			v.MinorPresent = true
 			v.Reasons = append(v.Reasons, fmt.Sprintf("face: %s ~%.0f", f.Gender, f.Age))

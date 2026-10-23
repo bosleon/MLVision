@@ -81,10 +81,12 @@ image
   or an exposed-part detection of 0.5 makes an image NSFW; both thresholds are
   tunable.
 - **Age and gender from faces.** Face detection, then per-face estimation on a
-  1.5x crop. A face under 18 marks the verdict `minor_present`.
+  1.5x crop. A face under 18 marks the verdict `minor_present`. Faces narrower
+  than 24 px are reported box-only rather than with a confident guess; lower
+  `-min-face` to estimate them anyway.
 - **Two model profiles.** `commercial` (default) uses only permissively licensed
-  models. `research` swaps in InsightFace's detector and age regressor, which are
-  stronger but licensed for non-commercial use. See [MODELS.md](MODELS.md).
+  models. `research` swaps in InsightFace's face detector, which is stronger but
+  licensed for non-commercial use. See [MODELS.md](MODELS.md).
 - **One runtime.** Every model is ONNX, executed through a single thin wrapper.
   No TensorFlow, no PyTorch, no Caffe, no Node.
 - **Offline by construction.** Models are fetched once, verified by SHA-256 and
@@ -103,7 +105,7 @@ image
 ## CLI
 
 ```
-mlvision scan [-json] [-profile commercial|research] [-no-faces] [-minor-age 18] [-models dir] <image|dir>...
+mlvision scan [-json] [-profile commercial|research] [-no-faces] [-minor-age 18] [-min-face 24] [-models dir] <image|dir>...
 mlvision models [list|pull|verify] [-profile ...]
 mlvision inspect <model.onnx>...
 ```
@@ -134,6 +136,7 @@ tools/               one-time PyTorch to ONNX export script
 - [x] NSFW whole-image classifier
 - [x] Nudity region detector and reason reporting
 - [x] Face detection, age and gender, commercial and research profiles
+- [x] Model files committed in-repo and published as a GitHub release
 - [x] CLI: `scan`, `models`, `inspect`, JSON output
 - [x] Model cache with SHA-256 verification
 - [ ] Video and stream support with frame sampling (ffmpeg)

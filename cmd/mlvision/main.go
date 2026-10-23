@@ -64,6 +64,7 @@ func scan(args []string) error {
 	asJSON := set.Bool("json", false, "one JSON object per line")
 	set.BoolVar(&opts.SkipFaces, "no-faces", false, "skip face, age and gender")
 	set.IntVar(&opts.Thresholds.MinorAge, "minor-age", 18, "age below which a face counts as a minor")
+	set.IntVar(&opts.Thresholds.MinFace, "min-face", 24, "faces narrower than this many pixels get no age or gender")
 	set.Parse(args)
 	if set.NArg() == 0 {
 		usage()
@@ -122,7 +123,10 @@ func format(path string, v mlvision.Verdict) string {
 	if len(v.Faces) > 0 {
 		var list []string
 		for _, f := range v.Faces {
-			s := fmt.Sprintf("%s %.0f", strings.ToUpper(f.Gender[:1]), f.Age)
+			s := "? small"
+			if f.Estimated {
+				s = fmt.Sprintf("%s %.0f", strings.ToUpper(f.Gender[:1]), f.Age)
+			}
 			if f.Minor {
 				s += " minor"
 			}
@@ -137,13 +141,11 @@ func format(path string, v mlvision.Verdict) string {
 }
 
 func profileModels(p mlvision.Profile) []models.Model {
-	base := []models.Model{models.NSFWMarqo, models.NudeNet}
-	switch p {
-	case mlvision.Research:
-		return append(base, models.FaceSCRFD, models.GenderAgeInsight)
-	default:
-		return append(base, models.FaceUltra, models.AgeFairFace, models.GenderFairFace)
+	base := []models.Model{models.NSFWMarqo, models.NudeNet, models.AgeFairFace, models.GenderFairFace}
+	if p == mlvision.Research {
+		return append(base, models.FaceSCRFD)
 	}
+	return append(base, models.FaceUltra)
 }
 
 func modelsCmd(args []string) error {

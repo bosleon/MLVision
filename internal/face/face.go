@@ -1,6 +1,7 @@
 // Package face detects faces and estimates age and gender for each one.
-// Two interchangeable implementations exist for each step so the caller can
-// pick a permissively licensed pair or the stronger research-only pair.
+// Two detectors exist, one permissively licensed and one research-only;
+// attributes always come from the FairFace classifiers because their bucket
+// probabilities expose uncertainty, which a bare regressor cannot.
 package face
 
 import (
@@ -31,7 +32,7 @@ type Estimator interface {
 }
 
 // cropMargin is how much context to keep around a face box before
-// estimating attributes; 1.5 matches the InsightFace and FairFace recipes.
+// estimating attributes; 1.5 matches the FairFace recipe.
 const cropMargin = 1.5
 
 func faceCrop(img image.Image, box image.Rectangle, size int) *image.RGBA {
