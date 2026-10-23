@@ -1,6 +1,6 @@
 # MLVision
 
-**Offline age, gender and NSFW detection for images. Pure Go. No Docker. No cloud.**
+**Offline age, gender and NSFW detection for images. Pure Go. No cloud.**
 
 MLVision is a Go library and a one-binary CLI. Give it an image and it tells you
 three things: is this explicit, how old is each person, and what is their likely
