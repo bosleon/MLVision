@@ -1,106 +1,142 @@
 # MLVision
 
-**Offline age, gender and NSFW detection for images and video. Pure Go. No Docker. No cloud.**
+**Offline age, gender and NSFW detection for images. Pure Go. No Docker. No cloud.**
 
-MLVision is a single static binary and a library. Point it at an image, a directory or a video
-stream and it tells you three things: is this explicit, how old is the person, and what is their
-likely gender. Everything runs on the local CPU (GPU optional) and nothing ever leaves the machine.
+MLVision is a Go library and a one-binary CLI. Give it an image and it tells you
+three things: is this explicit, how old is each person, and what is their likely
+gender. Everything runs on the local CPU and nothing leaves the machine.
 
-Simplicity and elegance are the design motifs. Where other projects stack Python, Docker, Caffe
-and a REST layer to answer one question, MLVision answers it with one `go install` and one call.
+Simplicity and elegance are the design motifs. Where other projects stack Python,
+Docker, Caffe and a REST layer to answer one question, MLVision answers it with one
+`go install` and one function call.
 
 ## About the author
 
-MLVision is written and maintained by Will Bohan, who has spent the last ten years working in
-machine learning and computer vision, building and shipping production classifiers, detectors
-and the vision libraries that wrap them. This project distills that experience into a tool that
-does one job well: best-of-breed content filtering, with none of the deployment weight that the
-field has grown used to.
+MLVision is written and maintained by Will Bohan, who has spent the last ten years
+working in machine learning and computer vision, building and shipping production
+classifiers, detectors and the vision libraries that wrap them. This project distils
+that experience into a tool that does one job well: best-of-breed content filtering
+without the deployment weight the field has grown used to.
 
-## Why another NSFW detector
+## Quick start
 
-The open source landscape is wide but fragmented. Yahoo Open NSFW, NudeNet, NSFWJS, OpenNSFW2,
-NsfwSpy, the Falconsai, AdamCodd, Marqo and SigLIP2 classifiers on Hugging Face: each is a
-single model with its own runtime, its own preprocessing quirks and its own definition of
-"explicit". None of them do age. Almost none run without Python.
-
-MLVision takes the best ideas from that body of work and unifies them:
-
-- **Two-stage NSFW decision.** A fast whole-image classifier gives a confident verdict on the
-  easy cases. A body-part detector resolves the hard ones and explains *why* an image was
-  flagged, which is what moderators and auditors actually need.
-- **Age and gender from faces.** Face detection, then per-face age regression and gender
-  classification. A frame with a minor in it is handled as a first-class signal, not an
-  afterthought.
-- **One runtime.** Every model is shipped as ONNX and executed through a single inference path.
-  No TensorFlow, no PyTorch, no Caffe, no Node.
-- **Offline by construction.** Models are bundled or fetched once into a local cache. There is
-  no network code in the inference path, so the privacy claim is verifiable by reading the source.
-
-## Design
-
-```
-image / frame
-     │
-     ├──► NSFW classifier (whole image) ──► score + label
-     │          │ (uncertain band)
-     │          └──► nudity detector (regions) ──► parts, boxes, confidence
-     │
-     └──► face detector ──► per face: age, gender, box
-                                   │
-                                   ▼
-                           Verdict { nsfw, reasons, faces[], minor_present }
-```
-
-Principles:
-
-1. **Library first.** The CLI is a thin wrapper over a Go package. If you can call a function,
-   you can integrate MLVision.
-2. **One struct in, one struct out.** `Analyze(img) (Verdict, error)`. No callbacks, no
-   configuration trees.
-3. **Thresholds are data, not code.** Sensible defaults ship in the binary. Override them with a
-   single small config if your use case disagrees.
-4. **Boring dependencies.** Standard library wherever possible, ONNX Runtime for inference,
-   nothing else that needs justifying.
-5. **Deterministic and testable.** Fixed preprocessing, pinned model hashes, golden tests on a
-   curated set.
-
-## Planned usage
+MLVision needs the ONNX Runtime shared library, the only dependency outside Go.
 
 ```bash
+brew install onnxruntime           # macOS
+# apt install libonnxruntime      # Debian/Ubuntu, or download a release from
+#                                 # github.com/microsoft/onnxruntime and set MLVISION_ORT_LIB
+
 go install github.com/bosleon/MLVision/cmd/mlvision@latest
 
+mlvision models pull               # one-time download (~210 MB) into the local cache
 mlvision scan photo.jpg
 mlvision scan ./uploads --json
-mlvision watch rtsp://camera/stream
 ```
 
-```go
-import "github.com/bosleon/MLVision"
+Sample output:
 
-v, err := mlvision.Analyze(ctx, img)
+```
+beach.jpg      safe 0.07  faces: F 26
+group.jpg      safe 0.06  faces: M 25, M 32, F 28, M 15 minor  [face: male ~15]
+example.jpg    NSFW 0.97  faces: F 31  [classifier: nsfw 0.97; detector: FEMALE_BREAST_EXPOSED 0.88]
+```
+
+## Library
+
+```go
+import mlvision "github.com/bosleon/MLVision"
+
+a, err := mlvision.New(ctx, mlvision.Options{})
+defer a.Close()
+
+v, err := a.AnalyzeFile(ctx, "photo.jpg")
 if v.NSFW || v.MinorPresent {
     reject(v.Reasons)
 }
 ```
 
+`Verdict` carries the classifier score, the body parts the detector found, every
+face with its age, age range and gender, and a list of human-readable reasons. The
+`Analyzer` is safe for concurrent use.
+
+## How it works
+
+```
+image
+  │
+  ├──► NSFW classifier (ViT, whole image) ──► score
+  │          │ score ≥ 0.2
+  │          └──► nudity detector (YOLOv8) ──► parts, boxes, confidence
+  │
+  └──► face detector ──► per face: age, gender, box
+                                │
+                                ▼
+                  Verdict { nsfw, score, reasons, parts, faces, minor_present }
+```
+
+- **Two-stage NSFW decision.** The classifier settles the easy cases. The part
+  detector resolves the uncertain band and explains *why* an image was flagged,
+  which is what moderators and auditors actually need. A classifier score of 0.8
+  or an exposed-part detection of 0.5 makes an image NSFW; both thresholds are
+  tunable.
+- **Age and gender from faces.** Face detection, then per-face estimation on a
+  1.5x crop. A face under 18 marks the verdict `minor_present`.
+- **Two model profiles.** `commercial` (default) uses only permissively licensed
+  models. `research` swaps in InsightFace's detector and age regressor, which are
+  stronger but licensed for non-commercial use. See [MODELS.md](MODELS.md).
+- **One runtime.** Every model is ONNX, executed through a single thin wrapper.
+  No TensorFlow, no PyTorch, no Caffe, no Node.
+- **Offline by construction.** Models are fetched once, verified by SHA-256 and
+  cached. There is no network code in the inference path.
+
+## Design principles
+
+1. **Library first.** The CLI is a thin wrapper over the package.
+2. **One struct in, one struct out.** `Analyze(ctx, img) (Verdict, error)`.
+3. **Thresholds are data, not code.** Defaults ship in the binary; override them in
+   `Options.Thresholds`.
+4. **Boring dependencies.** Standard library, `x/image`, ONNX Runtime, nothing else.
+5. **Deterministic and testable.** Fixed preprocessing, pinned model hashes,
+   `go test` runs without network access.
+
+## CLI
+
+```
+mlvision scan [-json] [-profile commercial|research] [-no-faces] [-minor-age 18] [-models dir] <image|dir>...
+mlvision models [list|pull|verify] [-profile ...]
+mlvision inspect <model.onnx>...
+```
+
+Environment: `MLVISION_MODEL_DIR` overrides the cache directory,
+`MLVISION_ORT_LIB` points at the ONNX Runtime shared library.
+
+## Layout
+
+```
+mlvision.go          public API: Options, Analyzer, Verdict
+models/              model registry, pinned hashes, cache and download
+internal/ort/        ONNX Runtime wrapper
+internal/vision/     decode, resize, letterbox, tensor packing, NMS
+internal/nsfw/       whole-image classifier
+internal/nudity/     NudeNet part detector
+internal/face/       face detectors and age/gender estimators, both profiles
+cmd/mlvision/        CLI
+tools/               one-time PyTorch to ONNX export script
+```
+
 ## Roadmap
 
-- [x] Repository and design
-- [ ] Core inference path (ONNX Runtime, image preprocessing)
-- [ ] NSFW whole-image classifier
-- [ ] Nudity region detector and reason reporting
-- [ ] Face detection, age and gender
-- [ ] CLI: `scan`, `watch`, JSON output
-- [ ] Video and stream support with frame sampling
-- [ ] Model cache and integrity verification
-- [ ] Benchmarks and evaluation set
+- [x] Core inference path (ONNX Runtime, image preprocessing)
+- [x] NSFW whole-image classifier
+- [x] Nudity region detector and reason reporting
+- [x] Face detection, age and gender, commercial and research profiles
+- [x] CLI: `scan`, `models`, `inspect`, JSON output
+- [x] Model cache with SHA-256 verification
+- [ ] Video and stream support with frame sampling (ffmpeg)
+- [ ] Benchmarks and a labelled evaluation set
 - [ ] Optional GPU execution providers
-
-## Status
-
-Early. The README is the spec. Code follows.
 
 ## License
 
-GPL-3.0. See [LICENSE](LICENSE).
+GPL-3.0. See [LICENSE](LICENSE). Model licences are listed in [MODELS.md](MODELS.md).
