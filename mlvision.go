@@ -50,7 +50,10 @@ type Options struct {
 
 // Box is a rectangle in image pixel coordinates.
 type Box struct {
-	X, Y, W, H int
+	X int `json:"x"`
+	Y int `json:"y"`
+	W int `json:"w"`
+	H int `json:"h"`
 }
 
 // Part is a body-part region found by the nudity detector.
