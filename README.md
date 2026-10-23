@@ -108,6 +108,9 @@ mlvision models [list|pull|verify] [-profile ...]
 mlvision inspect <model.onnx>...
 ```
 
+Running from a checkout needs no download: the model files are committed under
+`models/files`, so pass `-models models/files` or set `MLVISION_MODEL_DIR`.
+
 Environment: `MLVISION_MODEL_DIR` overrides the cache directory,
 `MLVISION_ORT_LIB` points at the ONNX Runtime shared library.
 

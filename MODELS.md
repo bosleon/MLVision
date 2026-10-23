@@ -2,7 +2,9 @@
 
 MLVision runs third-party models that are downloaded once into a local cache
 (`~/Library/Caches/mlvision/models` on macOS, `~/.cache/mlvision/models` on
-Linux, or `MLVISION_MODEL_DIR`). Each file is pinned by SHA-256 in
+Linux, or `MLVISION_MODEL_DIR`). The same files are committed under `models/files/`, so a
+clone can run without any download: `mlvision scan -models models/files photo.jpg`.
+Each file is pinned by SHA-256 in
 `models/models.go`. Nothing in the inference path touches the network.
 
 | Model | Role | Profile | Size | Licence | Source |

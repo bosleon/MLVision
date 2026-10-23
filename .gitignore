@@ -1,4 +1,3 @@
 /mlvision
 /tools/.venv/
-*.onnx
 *.part
