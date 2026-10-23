@@ -1,6 +1,6 @@
 // Command mlvision is a thin CLI over the mlvision library.
 //
-//	mlvision scan [-json] [-profile commercial|research] [-no-faces] <image|dir>...
+//	mlvision scan [-json|-v] [-profile commercial|research] [-no-faces] <image|dir>...
 //	mlvision models [list|pull|verify] [-profile ...]
 //	mlvision inspect <model.onnx>...
 package main
@@ -42,7 +42,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage:\n  mlvision scan [-json] [-profile commercial|research] [-no-faces] [-models dir] <image|dir>...\n  mlvision models [list|pull|verify] [-profile ...] [-models dir]\n  mlvision inspect <model.onnx>...")
+	fmt.Fprintln(os.Stderr, "usage:\n  mlvision scan [-json|-v] [-profile commercial|research] [-no-faces] [-models dir] <image|dir>...\n  mlvision models [list|pull|verify] [-profile ...] [-models dir]\n  mlvision inspect <model.onnx>...")
 	os.Exit(2)
 }
 
@@ -62,6 +62,7 @@ func scan(args []string) error {
 	set := flag.NewFlagSet("scan", flag.ExitOnError)
 	commonFlags(set, &opts)
 	asJSON := set.Bool("json", false, "one JSON object per line")
+	verbose := set.Bool("v", false, "list every detected part and face with scores and boxes")
 	set.BoolVar(&opts.SkipFaces, "no-faces", false, "skip face, age and gender")
 	set.IntVar(&opts.Thresholds.MinorAge, "minor-age", 18, "age below which a face counts as a minor")
 	set.IntVar(&opts.Thresholds.MinFace, "min-face", 24, "faces narrower than this many pixels get no age or gender")
@@ -99,7 +100,7 @@ func scan(args []string) error {
 					mlvision.Verdict
 				}{path, v})
 			}
-			fmt.Println(format(path, v))
+			fmt.Println(format(path, v, *verbose))
 			return nil
 		})
 		if err != nil {
@@ -112,13 +113,16 @@ func scan(args []string) error {
 	return nil
 }
 
-func format(path string, v mlvision.Verdict) string {
+func format(path string, v mlvision.Verdict, verbose bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-40s ", path)
-	if v.NSFW {
-		fmt.Fprintf(&b, "NSFW %.2f", v.Score)
-	} else {
-		fmt.Fprintf(&b, "safe %.2f", v.Score)
+	switch {
+	case v.NSFW:
+		fmt.Fprintf(&b, "NSFW       nsfw=%.2f", v.Score)
+	case v.Score >= 0.5:
+		fmt.Fprintf(&b, "borderline nsfw=%.2f", v.Score)
+	default:
+		fmt.Fprintf(&b, "safe       nsfw=%.2f", v.Score)
 	}
 	if len(v.Faces) > 0 {
 		var list []string
@@ -136,6 +140,20 @@ func format(path string, v mlvision.Verdict) string {
 	}
 	if len(v.Reasons) > 0 {
 		fmt.Fprintf(&b, "  [%s]", strings.Join(v.Reasons, "; "))
+	}
+	if !verbose {
+		return b.String()
+	}
+	for _, p := range v.Parts {
+		fmt.Fprintf(&b, "\n    part %-26s %.2f  at %d,%d %dx%d", p.Label, p.Score, p.Box.X, p.Box.Y, p.Box.W, p.Box.H)
+	}
+	for _, f := range v.Faces {
+		fmt.Fprintf(&b, "\n    face %.2f  at %d,%d %dx%d", f.Score, f.Box.X, f.Box.Y, f.Box.W, f.Box.H)
+		if f.Estimated {
+			fmt.Fprintf(&b, "  %s %.2f  age %.0f (%d-%d)", f.Gender, f.GenderScore, f.Age, f.AgeRange[0], f.AgeRange[1])
+		} else {
+			b.WriteString("  too small to estimate")
+		}
 	}
 	return b.String()
 }

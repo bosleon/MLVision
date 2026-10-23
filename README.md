@@ -37,10 +37,17 @@ mlvision scan ./uploads --json
 Sample output:
 
 ```
-beach.jpg      safe 0.07  faces: F 26
-group.jpg      safe 0.06  faces: M 25, M 32, F 28, M 15 minor  [face: male ~15]
-example.jpg    NSFW 0.97  faces: F 31  [classifier: nsfw 0.97; detector: FEMALE_BREAST_EXPOSED 0.88]
+beach.jpg      safe       nsfw=0.07  faces: F 26
+child.jpg      safe       nsfw=0.06  faces: F 31, M 11 minor  [face: male ~11]
+lingerie.jpg   borderline nsfw=0.77  faces: F 28
+example.jpg    NSFW       nsfw=0.97  faces: F 31  [classifier: nsfw 0.97; detector: FEMALE_BREAST_EXPOSED 0.88]
 ```
+
+The number is always the classifier's NSFW probability. `safe` means it fell
+below 0.5 and no exposed part was detected; `borderline` means the classifier
+leaned explicit but stayed under the 0.8 threshold and the detector found
+nothing exposed; `NSFW` means either test fired. Add `-v` to see every part and
+face with its score and box, or `-json` for the full verdict.
 
 ## Library
 
@@ -105,7 +112,7 @@ image
 ## CLI
 
 ```
-mlvision scan [-json] [-profile commercial|research] [-no-faces] [-minor-age 18] [-min-face 24] [-models dir] <image|dir>...
+mlvision scan [-json|-v] [-profile commercial|research] [-no-faces] [-minor-age 18] [-min-face 24] [-models dir] <image|dir>...
 mlvision models [list|pull|verify] [-profile ...]
 mlvision inspect <model.onnx>...
 ```
