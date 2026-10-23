@@ -1,6 +1,6 @@
 # MLVision
 
-**Offline age, gender and NSFW detection for images and video. Pure Go. No Docker. No cloud.**
+**Offline age, gender and NSFW detection for images and video. Pure Go. No cloud.**
 
 MLVision is a single static binary and a library. Point it at an image, a directory or a video
 stream and it tells you three things: is this explicit, how old is the person, and what is their
