@@ -62,7 +62,7 @@ func scan(args []string) error {
 	set := flag.NewFlagSet("scan", flag.ExitOnError)
 	commonFlags(set, &opts)
 	asJSON := set.Bool("json", false, "one JSON object per line")
-	verbose := set.Bool("v", false, "list every detected part and face with scores and boxes")
+	verbose := set.Bool("v", false, "always run the part detector and list every part and face with scores and boxes")
 	set.BoolVar(&opts.SkipFaces, "no-faces", false, "skip face, age and gender")
 	set.IntVar(&opts.Thresholds.MinorAge, "minor-age", 18, "age below which a face counts as a minor")
 	set.IntVar(&opts.Thresholds.MinFace, "min-face", 24, "faces narrower than this many pixels get no age or gender")
@@ -71,6 +71,9 @@ func scan(args []string) error {
 		usage()
 	}
 
+	if *verbose {
+		opts.Thresholds.Safe = 0.001 // run the part detector on every image
+	}
 	ctx := context.Background()
 	a, err := mlvision.New(ctx, opts)
 	if err != nil {

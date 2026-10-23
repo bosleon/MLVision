@@ -46,8 +46,9 @@ example.jpg    NSFW       nsfw=0.97  faces: F 31  [classifier: nsfw 0.97; detect
 The number is always the classifier's NSFW probability. `safe` means it fell
 below 0.5 and no exposed part was detected; `borderline` means the classifier
 leaned explicit but stayed under the 0.8 threshold and the detector found
-nothing exposed; `NSFW` means either test fired. Add `-v` to see every part and
-face with its score and box, or `-json` for the full verdict.
+nothing exposed; `NSFW` means either test fired. Add `-v` to run the part detector on
+every image and list each part and face with its score and box, or `-json`
+for the full verdict.
 
 ## Library
 
